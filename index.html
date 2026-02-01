@@ -156,22 +156,31 @@
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
     // --- VARIABLES ---
-    let player, mic, recorder, beatPlayer;
+    let player;         // YouTube Player
+    let mic;            // Tone.js Microphone
+    let recorder;       // Tone.js Recorder
+    let beatPlayer;     // Tone.js Player (for uploaded files)
     let isRecording = false;
     let audioBlob = null;
     let useYouTube = false;
 
     // --- 1. YOUTUBE SETUP ---
     function onYouTubeIframeAPIReady() {
-        player = new YT.Player('yt-player', { height: '100%', width: '100%', playerVars: { 'controls': 0, 'rel': 0 } });
+        player = new YT.Player('yt-player', { 
+            height: '100%', 
+            width: '100%', 
+            playerVars: { 'controls': 0, 'rel': 0 } 
+        });
     }
+    
     function loadVideo() {
         let url = document.getElementById('ytUrl').value;
         let id = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11}).*/);
         if(id) { 
-            player.loadVideoById(id[1]); player.stopVideo(); 
+            player.loadVideoById(id[1]); 
+            player.stopVideo(); 
             useYouTube = true;
-            document.getElementById('status').innerText = "YouTube Beat Loaded (Karaoke Mode)";
+            document.getElementById('status').innerText = "YouTube Loaded (Speaker Mode)";
         }
     }
 
@@ -181,52 +190,86 @@
         if(file){
             await Tone.start();
             const url = URL.createObjectURL(file);
+            
+            // Load beat but don't play yet
             beatPlayer = new Tone.Player(url).toDestination();
             beatPlayer.loop = false;
+            beatPlayer.volume.value = 0; // Start at 0db (Max volume)
+            
             useYouTube = false;
             document.getElementById('dropZone').innerText = "✅ " + file.name;
             document.getElementById('dropZone').style.borderColor = "var(--accent)";
-            document.getElementById('status').innerText = "File Beat Loaded (Full Mix Mode)";
+            document.getElementById('status').innerText = "File Beat Loaded (Best Quality)";
         }
     });
 
-    // --- 3. AUDIO RECORDING LOGIC ---
+    // --- 3. AUDIO RECORDING LOGIC (FIXED FOR SPEAKERS) ---
     async function toggleRecording() {
         const btn = document.getElementById('btnRecord');
 
         if (!isRecording) {
-            // START
+            // --- START RECORDING ---
             await Tone.start();
+            document.getElementById('status').innerText = "Starting Audio Engine...";
             
-            // Setup Mic
-            if(!mic) {
-                mic = new Tone.UserMedia();
+            // A. Setup Recorder
+            if (!recorder) recorder = new Tone.Recorder();
+
+            // B. Setup Mic (With Echo Cancellation for Speakers)
+            if (!mic) {
+                mic = new Tone.UserMedia({
+                    mute: false,
+                    volume: 0,
+                    echoCancellation: true, // CRITICAL: Removes beat from mic input
+                    noiseSuppression: true, // CRITICAL: Removes background hiss
+                    autoGain: true          // CRITICAL: Boosts low volume
+                });
                 await mic.open();
             }
-            
-            // Setup Recorder
-            recorder = new Tone.Recorder();
-            
-            // Routing: Mic always records. Beat only records if it's a file (Tone.Player).
+
+            // C. ROUTING (The Fix)
+            // 1. Mic goes to Recorder (Capture Voice)
             mic.connect(recorder);
-            mic.toDestination(); // Monitor (Hear yourself) - Be careful with headphones!
             
-            // Start Sources
+            // 2. Mic DOES NOT go to Speakers (Prevents Feedback/Screeching)
+            // mic.toDestination(); <--- I REMOVED THIS LINE
+
+            // 3. Beat goes to Recorder (Capture Music directly)
+            if (beatPlayer) {
+                beatPlayer.connect(recorder);
+            }
+
+            // --- START EVERYTHING ---
             recorder.start();
-            if(useYouTube && player) player.playVideo();
-            if(!useYouTube && beatPlayer) beatPlayer.start();
+            
+            if(useYouTube && player) {
+                player.playVideo();
+                // Note: We cannot digitally record YouTube. 
+                // The mic will pick up the speaker sound (Lo-Fi).
+            }
+            
+            if(!useYouTube && beatPlayer) {
+                beatPlayer.start(); 
+                // We ARE digitally recording this because of line C.3 above.
+            }
 
             isRecording = true;
             btn.innerText = "■ Stop Recording";
             btn.classList.add('recording');
-            document.getElementById('status').innerText = "Recording...";
+            document.getElementById('status').innerText = "🔴 Recording (Speak up!)...";
 
         } else {
-            // STOP
-            audioBlob = await recorder.stop();
-            
+            // --- STOP RECORDING ---
+            // Stop sources first
             if(useYouTube && player) player.stopVideo();
             if(!useYouTube && beatPlayer) beatPlayer.stop();
+
+            // Stop Recorder and get file
+            audioBlob = await recorder.stop();
+            
+            // Clean up connections so we don't double-record next time
+            mic.disconnect(recorder);
+            if(beatPlayer) beatPlayer.disconnect(recorder);
 
             // UI Updates
             const url = URL.createObjectURL(audioBlob);
@@ -240,26 +283,33 @@
             isRecording = false;
             btn.innerText = "● Record New Take";
             btn.classList.remove('recording');
-            document.getElementById('status').innerText = "Recording Finished!";
+            document.getElementById('status').innerText = "Finished! Listen below.";
         }
     }
 
     function updateMix() {
-        // Simple Volume Control
-        const beatVol = Tone.gainToDb(document.getElementById('beatSlider').value);
-        const micVol = Tone.gainToDb(document.getElementById('voiceSlider').value);
+        // Adjust Volumes immediately
+        // Note: Tone.js uses Decibels (dB). 0 is max, -Infinity is silent.
+        // We map slider 0-1 to Decibels.
         
-        if(beatPlayer) beatPlayer.volume.rampTo(beatVol, 0.1);
-        if(mic) mic.volume.rampTo(micVol, 0.1);
+        const beatVal = document.getElementById('beatSlider').value; // 0 to 1
+        const micVal = document.getElementById('voiceSlider').value; // 0 to 2
         
-        if(useYouTube && player) player.setVolume(document.getElementById('beatSlider').value * 100);
+        // Convert to dB (Simple approximation)
+        // If slider is 1, volume is 0dB. If slider is 0.5, volume is -6dB, etc.
+        const beatDb = beatVal > 0 ? 20 * Math.log10(beatVal) : -100;
+        const micDb = micVal > 0 ? 20 * Math.log10(micVal) : -100;
+
+        if(beatPlayer) beatPlayer.volume.rampTo(beatDb, 0.1);
+        if(mic) mic.volume.rampTo(micDb, 0.1);
+        
+        // YouTube volume is 0-100
+        if(useYouTube && player) player.setVolume(beatVal * 100);
     }
 
-    // --- 4. SHARE FUNCTION (IOS FIX) ---
+    // --- 4. SHARE FUNCTION ---
     async function shareAudio() {
         if (!audioBlob) return;
-        
-        // Create a File object from the blob (Required for iOS Share)
         const file = new File([audioBlob], "vibestream_mix.webm", { type: "audio/webm" });
 
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -271,7 +321,6 @@
                 });
             } catch (err) { console.log("Share failed", err); }
         } else {
-            // Fallback
             const a = document.createElement('a');
             a.href = URL.createObjectURL(audioBlob);
             a.download = "vibestream_mix.webm";
@@ -280,7 +329,7 @@
     }
 
     // --- 5. VIDEO BOOTH ---
-    let videoStream, videoRec, canvas, ctx, animationId;
+    let videoRec, canvas, ctx, animationId;
     let videoEl = document.createElement('video');
     videoEl.autoplay = true; videoEl.muted = true; videoEl.playsInline = true;
 
@@ -288,7 +337,6 @@
         document.getElementById('videoModal').style.display = 'flex';
         canvas = document.getElementById('videoCanvas');
         ctx = canvas.getContext('2d');
-        
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 720} } });
             videoEl.srcObject = stream;
@@ -305,13 +353,10 @@
 
     function drawLoop() {
         ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-        
-        // Watermark
         ctx.font = "bold 30px Arial";
         ctx.fillStyle = "rgba(255,255,255,0.7)";
         ctx.textAlign = "right";
         ctx.fillText("VibeStream", canvas.width - 20, canvas.height - 30);
-        
         animationId = requestAnimationFrame(drawLoop);
     }
 
@@ -320,16 +365,9 @@
         const audioEl = document.getElementById('masterAudio');
 
         if(btn.innerText.includes("Rec")) {
-            // Start
-            audioEl.play(); // Play the audio track
-            
-            // Capture Canvas Stream (Video)
+            audioEl.play();
             const stream = canvas.captureStream(30);
-            
-            // Try to add audio track from file if possible, else just video
-            // (Note: capturing audio element stream on mobile is very limited)
             videoRec = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            
             let chunks = [];
             videoRec.ondataavailable = e => chunks.push(e.data);
             videoRec.onstop = () => {
@@ -342,14 +380,11 @@
                 btn.innerText = "● Rec Video";
                 btn.style.background = "#ef4444";
             };
-
             videoRec.start();
             btn.innerText = "■ Stop";
             btn.style.background = "white";
             btn.style.color = "black";
-            
             audioEl.onended = () => { if(videoRec.state === 'recording') videoRec.stop(); };
-            
         } else {
             videoRec.stop();
             audioEl.pause();
