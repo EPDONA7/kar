@@ -285,9 +285,6 @@
 
         function render() {
             ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = "rgba(255,255,255,0.5)";
-            ctx.font = "bold 40px sans-serif";
-            ctx.fillText("VibeStream", 40, canvas.height - 60);
             animationId = requestAnimationFrame(render);
         }
         render();
