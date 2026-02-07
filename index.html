@@ -81,13 +81,24 @@
         #btnTikTok { background: white; color: black; flex: 1; }
 
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+/* REPLACE THIS SECTION IN YOUR <style> TAG */
+#videoModal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #000; z-index: 1000; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+}
 
-        #videoModal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 1000; display: none;
-            flex-direction: column; align-items: center; justify-content: center;
-        }
-        canvas { width: 100%; max-height: 70vh; object-fit: contain; }
+/* This limits the preview size so buttons are always visible, 
+   but does NOT affect the recording quality */
+#videoModal canvas { 
+    max-width: 100%; 
+    max-height: 75vh; 
+    aspect-ratio: 9/16; 
+    object-fit: contain; 
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    background: #111; /* Dark background for letterboxing if needed */
+}
     </style>
 </head>
 <body>
@@ -175,16 +186,27 @@
 
     // --- 2. AUDIO ENGINE (VOLUME FIX) ---
     async function initAudioEngine() {
-        await Tone.start();
-        if (!masterGain) {
-            masterGain = new Tone.Gain(1.5).toDestination(); 
-            limiter = new Tone.Limiter(-1).connect(masterGain); 
-            streamDestination = Tone.context.createMediaStreamDestination();
-            masterGain.connect(streamDestination);
-            recorder = new Tone.Recorder();
-            masterGain.connect(recorder);
-        }
+    // 1. Start Tone.js (standard)
+    await Tone.start();
+    
+    // 2. FORCE RESUME (The PC Fix)
+    // Sometimes Tone.start() doesn't wake the context on laptop browsers
+    if (Tone.context.state !== 'running') {
+        await Tone.context.resume();
     }
+
+    if (!masterGain) {
+        masterGain = new Tone.Gain(1.5).toDestination(); 
+        limiter = new Tone.Limiter(-1).connect(masterGain); 
+        streamDestination = Tone.context.createMediaStreamDestination();
+        masterGain.connect(streamDestination);
+        recorder = new Tone.Recorder();
+        masterGain.connect(recorder);
+        
+        // Ensure the mic path is also ready
+        micFilter = new Tone.Filter(200, "highpass").connect(limiter);
+    }
+}
 
     document.getElementById('beatInput').addEventListener('change', async (e) => {
         const file = e.target.files[0];
@@ -205,12 +227,18 @@
         await initAudioEngine();
         if (!mic) {
             mic = new Tone.UserMedia();
-            await mic.open();
-            mic.connect(limiter);
+            await mic.open({
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            });
+            // Connect ONLY to the filter, which already leads to the limiter/recorder
+            mic.connect(micFilter); 
         }
         
         recorder.start();
-
+        // ... rest of your start logic
+        
         if(useYouTube) {
             player.seekTo(0); // Move YouTube to the start
             player.playVideo();
@@ -237,6 +265,20 @@
             btn.innerText = "● RECORD NEW TAKE";
             btn.classList.remove('recording');
         }
+        if (!mic) {
+        try {
+            mic = new Tone.UserMedia();
+            await mic.open({
+                echoCancellation: true,
+                noiseSuppression: true
+            });
+            mic.connect(micFilter);
+        } catch (e) {
+            // This will tell you if the PC is blocking the mic
+            alert("Microphone Error: " + e.message + "\nPlease close other apps using the mic.");
+            return; // Stop the function so it doesn't break
+        }
+    }
     }
 
     function updateMix() {
@@ -273,22 +315,76 @@
     let videoEl = document.createElement('video');
     videoEl.muted = true; videoEl.playsInline = true;
 
-    async function openVideoBooth() {
-        document.getElementById('videoModal').style.display = 'flex';
-        const canvas = document.getElementById('videoCanvas');
-        const ctx = canvas.getContext('2d');
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "user", width: 720, height: 1280 } 
-        });
+    /* REPLACE THE openVideoBooth FUNCTION IN YOUR <script> TAG */
+
+async function openVideoBooth() {
+    document.getElementById('videoModal').style.display = 'flex';
+    const canvas = document.getElementById('videoCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 1. Force High-Res Vertical Canvas (Standard TikTok/Reels Resolution)
+    canvas.width = 720;
+    canvas.height = 1280;
+
+    // 2. Request Camera with ideal vertical constraints
+    // We prefer the user facing camera
+    const constraints = { 
+        video: { 
+            facingMode: "user",
+            width: { ideal: 1280 }, // Request high res
+            height: { ideal: 720 } 
+        },
+        audio: false // We use our own audio mix
+    };
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         videoEl.srcObject = stream;
         await videoEl.play();
 
         function render() {
-            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+            if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
+                // --- ASPECT RATIO FIX (Center Crop Logic) ---
+                
+                const vw = videoEl.videoWidth;
+                const vh = videoEl.videoHeight;
+                const cw = canvas.width;
+                const ch = canvas.height;
+
+                const videoRatio = vw / vh;
+                const canvasRatio = cw / ch;
+                
+                let sx, sy, sWidth, sHeight;
+
+                // Calculate crop dimensions to "cover" the canvas
+                if (videoRatio > canvasRatio) {
+                    // Video is wider than canvas (Crop sides)
+                    sHeight = vh;
+                    sWidth = vh * canvasRatio;
+                    sx = (vw - sWidth) / 2;
+                    sy = 0;
+                } else {
+                    // Video is taller than canvas (Crop top/bottom)
+                    sWidth = vw;
+                    sHeight = vw / canvasRatio;
+                    sx = 0;
+                    sy = (vh - sHeight) / 2;
+                }
+
+                // Draw the cropped video frame
+                ctx.drawImage(videoEl, sx, sy, sWidth, sHeight, 0, 0, cw, ch);
+            }
+            
+            // Loop
             animationId = requestAnimationFrame(render);
         }
         render();
+
+    } catch (err) {
+        alert("Camera Error: " + err.message);
+        closeVideoBooth();
     }
+}
 
     async function startVideoRecording() {
         const btn = document.getElementById('btnCamRecord');
@@ -303,9 +399,9 @@
             const audioTrack = streamDestination.stream.getAudioTracks()[0];
             if(audioTrack) videoStream.addTrack(audioTrack);
 
+            let chunks = []; // Ensure this is here!
             videoRec = new MediaRecorder(videoStream, { mimeType: 'video/webm' });
-            let chunks = [];
-            videoRec.ondataavailable = e => chunks.push(e.data);
+            videoRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
             videoRec.onstop = () => {
     const blob = new Blob(chunks, { type: 'video/mp4' });
     const url = URL.createObjectURL(blob);
@@ -342,7 +438,7 @@
         } else {
             videoRec.stop();
             audioEl.pause();
-        };
+        }
             
     }
 
