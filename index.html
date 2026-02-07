@@ -128,15 +128,15 @@
         border-radius: 10px; color: white; padding: 10px; margin-top: 5px; resize: none; font-family: inherit;"></textarea>
 </div>
         <div class="mixer-controls">
-            <div class="fader">
-                <label>Beat Boost</label>
-                <input type="range" id="beatSlider" min="0" max="1.5" step="0.05" value="0.8" oninput="updateMix()">
-            </div>
-            <div class="fader">
-                <label>Voice Gain</label>
-                <input type="range" id="voiceSlider" min="0" max="3" step="0.1" value="1.5" oninput="updateMix()">
-            </div>
-        </div>
+    <div class="fader">
+        <label>Beat Volume (Boosted)</label>
+        <input type="range" id="beatSlider" min="0" max="3.0" step="0.1" value="1.2" oninput="updateMix()">
+    </div>
+    <div class="fader">
+        <label>Voice Volume</label>
+        <input type="range" id="voiceSlider" min="0" max="3.0" step="0.1" value="1.5" oninput="updateMix()">
+    </div>
+</div>
 
         <button id="btnRecord" class="action-btn" onclick="toggleRecording()">● START RECORDING</button>
         <div id="status" style="text-align:center; font-size:0.8rem; margin-top:10px; color:var(--accent);">Ready</div>
@@ -186,25 +186,46 @@
 
     // --- 2. AUDIO ENGINE (VOLUME FIX) ---
     async function initAudioEngine() {
-    // 1. Start Tone.js (standard)
     await Tone.start();
     
-    // 2. FORCE RESUME (The PC Fix)
-    // Sometimes Tone.start() doesn't wake the context on laptop browsers
+    // Force resume for iOS
     if (Tone.context.state !== 'running') {
         await Tone.context.resume();
     }
 
     if (!masterGain) {
-        masterGain = new Tone.Gain(1.5).toDestination(); 
-        limiter = new Tone.Limiter(-1).connect(masterGain); 
-        streamDestination = Tone.context.createMediaStreamDestination();
-        masterGain.connect(streamDestination);
-        recorder = new Tone.Recorder();
-        masterGain.connect(recorder);
+        // 1. ADD COMPRESSOR: This makes quiet sounds louder (Loudness Maximizer)
+        const masterCompressor = new Tone.Compressor({
+            threshold: -20,
+            ratio: 3,
+            attack: 0.003,
+            release: 0.25
+        });
+
+        // 2. BOOST MASTER GAIN: We set the base output higher
+        masterGain = new Tone.Gain(1.2); 
+        limiter = new Tone.Limiter(-0.5); 
         
-        // Ensure the mic path is also ready
-        micFilter = new Tone.Filter(200, "highpass").connect(limiter);
+        // Connect Chain: Input -> Compressor -> Gain -> Limiter -> Speakers
+        masterCompressor.connect(masterGain);
+        masterGain.connect(limiter);
+        limiter.toDestination();
+
+        // Recording Stream Setup
+        streamDestination = Tone.context.createMediaStreamDestination();
+        limiter.connect(streamDestination);
+        
+        recorder = new Tone.Recorder();
+        limiter.connect(recorder);
+
+        // Visualizer Setup
+        fft = new Tone.FFT(64);
+        limiter.connect(fft);
+        canvasCtx = document.getElementById('waveform') ? document.getElementById('waveform').getContext('2d') : null;
+        if(canvasCtx) drawVisualizer();
+
+        // Mic Filters
+        micFilter = new Tone.Filter(200, "highpass").connect(masterCompressor);
     }
 }
 
@@ -282,12 +303,18 @@
     }
 
     function updateMix() {
-        const b = document.getElementById('beatSlider').value;
-        const v = document.getElementById('voiceSlider').value;
-        if(beatPlayer) beatPlayer.volume.value = Tone.gainToDb(b);
-        if(mic) mic.volume.value = Tone.gainToDb(v);
-        if(useYouTube && player) player.setVolume(b * 100);
-    }
+    const b = parseFloat(document.getElementById('beatSlider').value);
+    const v = parseFloat(document.getElementById('voiceSlider').value);
+    
+    // We add a base boost of +3dB to the beat automatically
+    if(beatPlayer) beatPlayer.volume.value = Tone.gainToDb(b * 1.5);
+    
+    // Mic usually needs less boosting to avoid feedback
+    if(mic) mic.volume.value = Tone.gainToDb(v);
+    
+    // YouTube Volume Logic
+    if(useYouTube && player) player.setVolume(Math.min(100, b * 100));
+}
 
     // --- 4. iOS DOWNLOAD / SHARE FIX ---
     async function shareAudio() {
