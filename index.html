@@ -190,12 +190,9 @@
         if(file){
             await Tone.start();
             const url = URL.createObjectURL(file);
-            
-            // Load beat but don't play yet
             beatPlayer = new Tone.Player(url).toDestination();
             beatPlayer.loop = false;
-            beatPlayer.volume.value = 0; // Start at 0db (Max volume)
-            
+            beatPlayer.volume.value = 0; 
             useYouTube = false;
             document.getElementById('dropZone').innerText = "✅ " + file.name;
             document.getElementById('dropZone').style.borderColor = "var(--accent)";
@@ -203,71 +200,53 @@
         }
     });
 
-    // --- 3. AUDIO RECORDING LOGIC (FIXED FOR SPEAKERS) ---
+    // --- 3. AUDIO RECORDING LOGIC ---
     async function toggleRecording() {
         const btn = document.getElementById('btnRecord');
 
         if (!isRecording) {
-            // --- START RECORDING ---
+            // START RECORDING
             await Tone.start();
             document.getElementById('status').innerText = "Starting Audio Engine...";
             
-            // A. Setup Recorder
             if (!recorder) recorder = new Tone.Recorder();
 
-            // B. Setup Mic (With Echo Cancellation for Speakers)
             if (!mic) {
                 mic = new Tone.UserMedia({
                     mute: false,
                     volume: 0,
-                    echoCancellation: true, // CRITICAL: Removes beat from mic input
-                    noiseSuppression: true, // CRITICAL: Removes background hiss
-                    autoGain: true          // CRITICAL: Boosts low volume
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGain: true
                 });
                 await mic.open();
             }
 
-            // C. ROUTING (The Fix)
-            // 1. Mic goes to Recorder (Capture Voice)
             mic.connect(recorder);
-            
-            // 2. Mic DOES NOT go to Speakers (Prevents Feedback/Screeching)
-            // mic.toDestination(); <--- I REMOVED THIS LINE
+            if (beatPlayer) beatPlayer.connect(recorder);
 
-            // 3. Beat goes to Recorder (Capture Music directly)
-            if (beatPlayer) {
-                beatPlayer.connect(recorder);
-            }
-
-            // --- START EVERYTHING ---
             recorder.start();
             
-            if(useYouTube && player) {
-                player.playVideo();
-                // Note: We cannot digitally record YouTube. 
-                // The mic will pick up the speaker sound (Lo-Fi).
-            }
-            
-            if(!useYouTube && beatPlayer) {
-                beatPlayer.start(); 
-                // We ARE digitally recording this because of line C.3 above.
-            }
+            if(useYouTube && player) player.playVideo();
+            if(!useYouTube && beatPlayer) beatPlayer.start();
 
             isRecording = true;
             btn.innerText = "■ Stop Recording";
             btn.classList.add('recording');
-            document.getElementById('status').innerText = "🔴 Recording (Speak up!)...";
+            document.getElementById('status').innerText = "🔴 Recording...";
 
         } else {
-            // --- STOP RECORDING ---
-            // Stop sources first
+            // STOP RECORDING
             if(useYouTube && player) player.stopVideo();
             if(!useYouTube && beatPlayer) beatPlayer.stop();
 
-            // Stop Recorder and get file
-            audioBlob = await recorder.stop();
+            // 1. Get the raw WebM blob
+            const rawBlob = await recorder.stop();
             
-            // Clean up connections so we don't double-record next time
+            // 2. Convert WebM to WAV (The Fix)
+            document.getElementById('status').innerText = "Processing to WAV...";
+            audioBlob = await convertToWav(rawBlob);
+
             mic.disconnect(recorder);
             if(beatPlayer) beatPlayer.disconnect(recorder);
 
@@ -283,52 +262,103 @@
             isRecording = false;
             btn.innerText = "● Record New Take";
             btn.classList.remove('recording');
-            document.getElementById('status').innerText = "Finished! Listen below.";
+            document.getElementById('status').innerText = "Ready! Download ready.";
         }
     }
 
     function updateMix() {
-        // Adjust Volumes immediately
-        // Note: Tone.js uses Decibels (dB). 0 is max, -Infinity is silent.
-        // We map slider 0-1 to Decibels.
-        
-        const beatVal = document.getElementById('beatSlider').value; // 0 to 1
-        const micVal = document.getElementById('voiceSlider').value; // 0 to 2
-        
-        // Convert to dB (Simple approximation)
-        // If slider is 1, volume is 0dB. If slider is 0.5, volume is -6dB, etc.
+        const beatVal = document.getElementById('beatSlider').value;
+        const micVal = document.getElementById('voiceSlider').value;
         const beatDb = beatVal > 0 ? 20 * Math.log10(beatVal) : -100;
         const micDb = micVal > 0 ? 20 * Math.log10(micVal) : -100;
 
         if(beatPlayer) beatPlayer.volume.rampTo(beatDb, 0.1);
         if(mic) mic.volume.rampTo(micDb, 0.1);
-        
-        // YouTube volume is 0-100
         if(useYouTube && player) player.setVolume(beatVal * 100);
     }
 
-    // --- 4. SHARE FUNCTION ---
+    // --- 4. NEW WAV CONVERTER ENGINE ---
+    async function convertToWav(webmBlob) {
+        // A. Decode the WebM audio data
+        const arrayBuffer = await webmBlob.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        // B. Prepare WAV encoding
+        const numOfChan = audioBuffer.numberOfChannels;
+        const length = audioBuffer.length * numOfChan * 2 + 44;
+        const buffer = new ArrayBuffer(length);
+        const view = new DataView(buffer);
+        let channels = [], i, sample;
+        let offset = 0;
+        let pos = 0;
+
+        // C. Write WAV Header
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + audioBuffer.length * numOfChan * 2, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numOfChan, true);
+        view.setUint32(24, audioBuffer.sampleRate, true);
+        view.setUint32(28, audioBuffer.sampleRate * 2 * numOfChan, true);
+        view.setUint16(32, numOfChan * 2, true);
+        view.setUint16(34, 16, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, audioBuffer.length * numOfChan * 2, true);
+
+        // D. Interleave and write audio data
+        for(i = 0; i < audioBuffer.numberOfChannels; i++)
+            channels.push(audioBuffer.getChannelData(i));
+
+        offset = 44;
+        while(pos < audioBuffer.length){
+            for(i = 0; i < numOfChan; i++){
+                sample = Math.max(-1, Math.min(1, channels[i][pos])); // Clamp
+                sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767)|0; // Scale to 16-bit
+                view.setInt16(offset, sample, true);
+                offset += 2;
+            }
+            pos++;
+        }
+
+        return new Blob([buffer], { type: "audio/wav" });
+    }
+
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    }
+
+    // --- 5. SHARE FUNCTION (UPDATED) ---
     async function shareAudio() {
         if (!audioBlob) return;
-        const file = new File([audioBlob], "vibestream_mix.webm", { type: "audio/webm" });
+        
+        // Ensure file is treated as a WAV
+        const file = new File([audioBlob], "vibestream_record.wav", { type: "audio/wav" });
 
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             try {
                 await navigator.share({
                     files: [file],
                     title: 'My VibeStream',
-                    text: 'Check out my new recording!'
+                    text: 'Listen to my new track!'
                 });
             } catch (err) { console.log("Share failed", err); }
         } else {
+            // Direct Download Fallback
             const a = document.createElement('a');
             a.href = URL.createObjectURL(audioBlob);
-            a.download = "vibestream_mix.webm";
+            a.download = "vibestream_record.wav"; // Forces .wav extension
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
         }
     }
 
-    // --- 5. VIDEO BOOTH ---
+    // --- 6. VIDEO BOOTH ---
     let videoRec, canvas, ctx, animationId;
     let videoEl = document.createElement('video');
     videoEl.autoplay = true; videoEl.muted = true; videoEl.playsInline = true;
