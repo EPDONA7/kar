@@ -3,297 +3,368 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VibeStream Studio</title>
+    <title>VibeStream Studio Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         :root {
             --primary: #c084fc;
             --accent: #2dd4bf;
-            --glass: rgba(0, 0, 0, 0.85);
+            --glass: rgba(0, 0, 0, 0.9);
             --border: rgba(255, 255, 255, 0.15);
-            --tik-blue: #00f2ea;
-            --tik-red: #ff0050;
         }
-
+        #lyricsArea:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(255,255,255,0.1);
+    box-shadow: 0 0 10px rgba(192, 132, 252, 0.2);
+}
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter', -apple-system, sans-serif;
             color: white;
             min-height: 100vh;
             margin: 0;
             display: flex;
             justify-content: center;
             align-items: center;
-            background: linear-gradient(-45deg, #000000, #1e1b4b, #312e81);
-            background-size: 400% 400%;
-            animation: gradientBG 15s ease infinite;
+            background: radial-gradient(circle at center, #1e1b4b, #000000);
         }
 
-        @keyframes gradientBG {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .studio-container {
-            width: 95%; max-width: 600px;
-            display: flex; flex-direction: column; gap: 20px;
-            padding-bottom: 50px;
-        }
-
-        /* Panel Styling */
+        .studio-container { width: 95%; max-width: 500px; padding: 20px 0; }
         .panel {
             background: var(--glass);
             backdrop-filter: blur(20px);
             border: 1px solid var(--border);
-            border-radius: 24px;
+            border-radius: 30px;
             padding: 25px;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.8);
         }
 
-        h1 { margin: 0 0 15px 0; font-size: 1.5rem; text-align: center; background: linear-gradient(to right, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h1 { text-align: center; margin: 0 0 20px 0; font-weight: 900; background: linear-gradient(to right, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        /* Inputs */
-        .input-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+        .input-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
         
         .file-upload {
-            border: 2px dashed var(--border); padding: 15px; text-align: center; border-radius: 12px; color: #aaa; font-size: 0.9rem; position: relative;
+            border: 2px dashed var(--border);
+            padding: 15px;
+            text-align: center;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
         }
-        input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; }
-        
+
         input[type="text"] {
             background: rgba(255,255,255,0.1); border: 1px solid var(--border);
             padding: 12px; border-radius: 10px; color: white; outline: none; width: 100%; box-sizing: border-box;
         }
 
-        /* Video Area */
         .video-wrapper {
             width: 100%; padding-bottom: 56.25%; background: #000; border-radius: 15px;
-            position: relative; overflow: hidden; border: 1px solid var(--border); margin-bottom: 20px;
+            position: relative; overflow: hidden; border: 1px solid var(--border); margin-bottom: 15px;
         }
-        iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:none; }
+        #yt-player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        /* Controls */
-        .mixer-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-        .fader label { display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .mixer-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+        .fader label { display: block; font-size: 0.7rem; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase; }
         input[type="range"] { width: 100%; accent-color: var(--primary); }
 
-        /* Buttons */
         .action-btn {
-            width: 100%; padding: 16px; border-radius: 14px; border: none; font-size: 1rem; font-weight: 800;
-            cursor: pointer; transition: 0.2s; text-transform: uppercase; margin-top: 10px; color: white;
+            width: 100%; padding: 18px; border-radius: 15px; border: none; 
+            font-size: 1rem; font-weight: 800; cursor: pointer; transition: 0.2s;
+            margin-top: 10px; text-transform: uppercase;
         }
-        #btnRecord { background: var(--primary); color: black; }
-        #btnRecord.recording { background: #ef4444; animation: pulse 1.5s infinite; color: white; }
+
+        #btnRecord { background: var(--primary); color: #000; }
+        #btnRecord.recording { background: #ff4757; animation: pulse 1s infinite; color: white; }
         
-        #btnShare { background: #3b82f6; display: none; }
-        #btnTikTok { background: linear-gradient(90deg, var(--tik-blue), var(--tik-red)); display: none; margin-top: 15px; }
+        .download-group { display: none; margin-top: 15px; gap: 10px; }
+        #btnShare { background: #3b82f6; color: white; flex: 1; }
+        #btnTikTok { background: white; color: black; flex: 1; }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
-        /* Modal */
         #videoModal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 1000;
-            display: none; flex-direction: column; align-items: center; justify-content: center;
+            background: #000; z-index: 1000; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
         }
-        canvas { max-width: 100%; max-height: 80vh; border-radius: 12px; border: 2px solid var(--primary); }
-        .cam-controls { display: flex; gap: 15px; margin-top: 20px; }
-        .cam-btn { padding: 12px 24px; border-radius: 50px; border: none; font-weight: bold; font-size: 1rem; }
-        
-        .status-text { font-size: 0.8rem; color: #aaa; text-align: center; margin-top: 5px; }
+        canvas { width: 100%; max-height: 70vh; object-fit: contain; }
     </style>
 </head>
 <body>
 
 <div class="studio-container">
     <div class="panel">
-        <h1>VibeStream Mobile</h1>
+        <h1>EPDONA</h1>
         
         <div class="input-group">
-            <div class="file-upload" id="dropZone">
-                📂 Tap to Upload Beat (MP3/WAV)
-                <input type="file" id="beatInput" accept="audio/*">
+            <div class="file-upload" onclick="document.getElementById('beatInput').click()">
+                <input type="file" id="beatInput" accept="audio/*" style="display:none">
+                <span id="file-label">📂 Tap to Load Local Beat</span>
             </div>
-            <div style="text-align:center; font-size:0.8rem; opacity:0.6;">OR</div>
             <div style="display:flex; gap:5px;">
                 <input type="text" id="ytUrl" placeholder="Paste YouTube Link...">
-                <button onclick="loadVideo()" style="padding:0 15px; border-radius:8px; border:none; background:#333; color:white;">GO</button>
+                <button onclick="loadVideo()" style="padding:0 15px; border-radius:10px; border:none; background:var(--accent); color:black; font-weight:bold;">GO</button>
             </div>
         </div>
 
         <div class="video-wrapper">
             <div id="yt-player"></div>
         </div>
-
+<div class="lyrics-container" style="margin-top: 15px;">
+    <label style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase;">📝 Lyrics / Notes</label>
+    <textarea id="lyricsArea" placeholder="Write your lyrics here..." 
+        style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); 
+        border-radius: 10px; color: white; padding: 10px; margin-top: 5px; resize: none; font-family: inherit;"></textarea>
+</div>
         <div class="mixer-controls">
             <div class="fader">
-                <label>🎵 Beat Vol</label>
-                <input type="range" id="beatSlider" min="0" max="1" step="0.05" value="0.5" oninput="updateMix()">
+                <label>Beat Boost</label>
+                <input type="range" id="beatSlider" min="0" max="1.5" step="0.05" value="0.8" oninput="updateMix()">
             </div>
             <div class="fader">
-                <label>🎤 Voice Vol</label>
-                <input type="range" id="voiceSlider" min="0" max="2" step="0.1" value="1.0" oninput="updateMix()">
+                <label>Voice Gain</label>
+                <input type="range" id="voiceSlider" min="0" max="3" step="0.1" value="1.5" oninput="updateMix()">
             </div>
         </div>
 
-        <button id="btnRecord" class="action-btn" onclick="toggleRecording()">● Start Recording</button>
-        <div id="status" class="status-text">Ready to Record</div>
+        <button id="btnRecord" class="action-btn" onclick="toggleRecording()">● START RECORDING</button>
+        <div id="status" style="text-align:center; font-size:0.8rem; margin-top:10px; color:var(--accent);">Ready</div>
 
         <audio id="masterAudio" controls style="width:100%; margin-top:15px; display:none;"></audio>
-        <button id="btnShare" class="action-btn" onclick="shareAudio()">🚀 Share Audio (iOS)</button>
-        <button id="btnTikTok" class="action-btn" onclick="openVideoBooth()">📱 Make TikTok Video</button>
+        
+        <div class="download-group" id="downloadGroup">
+            <button id="btnShare" class="action-btn" onclick="shareAudio()">📤 Save to iPhone</button>
+            <button id="btnTikTok" class="action-btn" onclick="openVideoBooth()">📱 Make Video</button>
+        </div>
     </div>
 </div>
 
 <div id="videoModal">
     <canvas id="videoCanvas" width="720" height="1280"></canvas>
-    <div class="cam-controls">
-        <button class="cam-btn" onclick="closeVideoBooth()" style="background:#333; color:white;">Close</button>
-        <button id="btnCamRecord" class="cam-btn" onclick="startVideoRecording()" style="background:#ef4444; color:white;">● Rec Video</button>
+    <div style="padding: 20px; width: 100%; box-sizing: border-box;">
+        <button id="btnCamRecord" class="action-btn" onclick="startVideoRecording()" style="background:#ff4757; color:white;">● RECORD VIDEO</button>
+        <button class="action-btn" onclick="closeVideoBooth()" style="background:#333; color:white;">EXIT</button>
     </div>
 </div>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
-    // --- VARIABLES ---
-    let player;         // YouTube Player
-    let mic;            // Tone.js Microphone
-    let recorder;       // Tone.js Recorder
-    let beatPlayer;     // Tone.js Player (for uploaded files)
+    let player, mic, recorder, beatPlayer, masterGain, limiter, streamDestination;
     let isRecording = false;
     let audioBlob = null;
     let useYouTube = false;
 
-    // --- 1. YOUTUBE SETUP ---
+    // --- 1. YOUTUBE API ---
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('yt-player', { 
-            height: '100%', 
-            width: '100%', 
-            playerVars: { 'controls': 0, 'rel': 0 } 
+            height: '100%', width: '100%', 
+            playerVars: { 'controls': 1, 'rel': 0, 'modestbranding': 1 } 
         });
     }
-    
+
     function loadVideo() {
-        let url = document.getElementById('ytUrl').value;
-        let id = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11}).*/);
-        if(id) { 
-            player.loadVideoById(id[1]); 
-            player.stopVideo(); 
-            useYouTube = true;
-            document.getElementById('status').innerText = "YouTube Loaded (Speaker Mode)";
+    let url = document.getElementById('ytUrl').value;
+    let id = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11}).*/);
+    if(id) { 
+        // "cue" prepares the video but stays paused
+        player.cueVideoById(id[1]); 
+        useYouTube = true;
+        document.getElementById('status').innerText = "YouTube Beat Loaded & Ready";
+    }
+}
+
+    // --- 2. AUDIO ENGINE (VOLUME FIX) ---
+    async function initAudioEngine() {
+        await Tone.start();
+        if (!masterGain) {
+            masterGain = new Tone.Gain(1.5).toDestination(); 
+            limiter = new Tone.Limiter(-1).connect(masterGain); 
+            streamDestination = Tone.context.createMediaStreamDestination();
+            masterGain.connect(streamDestination);
+            recorder = new Tone.Recorder();
+            masterGain.connect(recorder);
         }
     }
 
-    // --- 2. FILE BEAT SETUP ---
     document.getElementById('beatInput').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if(file){
-            await Tone.start();
-            const url = URL.createObjectURL(file);
-            beatPlayer = new Tone.Player(url).toDestination();
-            beatPlayer.loop = false;
-            beatPlayer.volume.value = 0; 
+            await initAudioEngine();
             useYouTube = false;
-            document.getElementById('dropZone').innerText = "✅ " + file.name;
-            document.getElementById('dropZone').style.borderColor = "var(--accent)";
-            document.getElementById('status').innerText = "File Beat Loaded (Best Quality)";
+            const url = URL.createObjectURL(file);
+            if(beatPlayer) beatPlayer.dispose();
+            beatPlayer = new Tone.Player(url).connect(limiter);
+            document.getElementById('file-label').innerText = "✅ " + file.name;
         }
     });
 
-    // --- 3. AUDIO RECORDING LOGIC ---
+    // --- 3. RECORDING ---
     async function toggleRecording() {
         const btn = document.getElementById('btnRecord');
-
         if (!isRecording) {
-            // START RECORDING
-            await Tone.start();
-            document.getElementById('status').innerText = "Starting Audio Engine...";
-            
-            if (!recorder) recorder = new Tone.Recorder();
+        await initAudioEngine();
+        if (!mic) {
+            mic = new Tone.UserMedia();
+            await mic.open();
+            mic.connect(limiter);
+        }
+        
+        recorder.start();
 
-            if (!mic) {
-                mic = new Tone.UserMedia({
-                    mute: false,
-                    volume: 0,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGain: true
-                });
-                await mic.open();
-            }
+        if(useYouTube) {
+            player.seekTo(0); // Move YouTube to the start
+            player.playVideo();
+        } else if(beatPlayer) {
+            beatPlayer.start(0, 0); // Start File Player from 0 seconds
+        }
 
-            mic.connect(recorder);
-            if (beatPlayer) beatPlayer.connect(recorder);
-
-            recorder.start();
-            
-            if(useYouTube && player) player.playVideo();
-            if(!useYouTube && beatPlayer) beatPlayer.start();
-
-            isRecording = true;
-            btn.innerText = "■ Stop Recording";
-            btn.classList.add('recording');
-            document.getElementById('status').innerText = "🔴 Recording...";
-
-        } else {
-            // STOP RECORDING
-            if(useYouTube && player) player.stopVideo();
-            if(!useYouTube && beatPlayer) beatPlayer.stop();
-
-            // 1. Get the raw WebM blob
+        isRecording = true;
+        btn.innerText = "■ STOP RECORDING";
+        btn.classList.add('recording');
+    } else {
             const rawBlob = await recorder.stop();
-            
-            // 2. Convert WebM to WAV (The Fix)
-            document.getElementById('status').innerText = "Processing to WAV...";
             audioBlob = await convertToWav(rawBlob);
-
-            mic.disconnect(recorder);
-            if(beatPlayer) beatPlayer.disconnect(recorder);
-
-            // UI Updates
+            
             const url = URL.createObjectURL(audioBlob);
             const audioEl = document.getElementById('masterAudio');
             audioEl.src = url;
             audioEl.style.display = 'block';
+            document.getElementById('downloadGroup').style.display = 'flex';
             
-            document.getElementById('btnShare').style.display = 'block';
-            document.getElementById('btnTikTok').style.display = 'block';
-            
+            if(useYouTube) player.pauseVideo();
+            else if(beatPlayer) beatPlayer.stop();
             isRecording = false;
-            btn.innerText = "● Record New Take";
+            btn.innerText = "● RECORD NEW TAKE";
             btn.classList.remove('recording');
-            document.getElementById('status').innerText = "Ready! Download ready.";
         }
     }
 
     function updateMix() {
-        const beatVal = document.getElementById('beatSlider').value;
-        const micVal = document.getElementById('voiceSlider').value;
-        const beatDb = beatVal > 0 ? 20 * Math.log10(beatVal) : -100;
-        const micDb = micVal > 0 ? 20 * Math.log10(micVal) : -100;
-
-        if(beatPlayer) beatPlayer.volume.rampTo(beatDb, 0.1);
-        if(mic) mic.volume.rampTo(micDb, 0.1);
-        if(useYouTube && player) player.setVolume(beatVal * 100);
+        const b = document.getElementById('beatSlider').value;
+        const v = document.getElementById('voiceSlider').value;
+        if(beatPlayer) beatPlayer.volume.value = Tone.gainToDb(b);
+        if(mic) mic.volume.value = Tone.gainToDb(v);
+        if(useYouTube && player) player.setVolume(b * 100);
     }
 
-    // --- 4. NEW WAV CONVERTER ENGINE ---
+    // --- 4. iOS DOWNLOAD / SHARE FIX ---
+    async function shareAudio() {
+        if (!audioBlob) return;
+        const file = new File([audioBlob], "VibeStream_Recording.wav", { type: "audio/wav" });
+        
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'My VibeStream Recording',
+                });
+            } catch (err) { console.error("Share failed", err); }
+        } else {
+            // Fallback for browsers without Share API
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(audioBlob);
+            a.download = "VibeStream_Recording.wav";
+            a.click();
+        }
+    }
+
+    // --- 5. VIDEO LOGIC ---
+    let videoRec, animationId;
+    let videoEl = document.createElement('video');
+    videoEl.muted = true; videoEl.playsInline = true;
+
+    async function openVideoBooth() {
+        document.getElementById('videoModal').style.display = 'flex';
+        const canvas = document.getElementById('videoCanvas');
+        const ctx = canvas.getContext('2d');
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "user", width: 720, height: 1280 } 
+        });
+        videoEl.srcObject = stream;
+        await videoEl.play();
+
+        function render() {
+            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "rgba(255,255,255,0.5)";
+            ctx.font = "bold 40px sans-serif";
+            ctx.fillText("VibeStream", 40, canvas.height - 60);
+            animationId = requestAnimationFrame(render);
+        }
+        render();
+    }
+
+    async function startVideoRecording() {
+        const btn = document.getElementById('btnCamRecord');
+        const audioEl = document.getElementById('masterAudio');
+        const canvas = document.getElementById('videoCanvas');
+
+        if(btn.innerText.includes("RECORD")) {
+            audioEl.currentTime = 0;
+            audioEl.play();
+
+            const videoStream = canvas.captureStream(30);
+            const audioTrack = streamDestination.stream.getAudioTracks()[0];
+            if(audioTrack) videoStream.addTrack(audioTrack);
+
+            videoRec = new MediaRecorder(videoStream, { mimeType: 'video/webm' });
+            let chunks = [];
+            videoRec.ondataavailable = e => chunks.push(e.data);
+            videoRec.onstop = () => {
+    const blob = new Blob(chunks, { type: 'video/mp4' });
+    const url = URL.createObjectURL(blob);
+    const fileName = "VibeStream_Video.mp4";
+
+    // 1. For iPhone/Android: Try the Share Sheet
+    if (navigator.share && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        const file = new File([blob], fileName, { type: "video/mp4" });
+        navigator.share({ files: [file], title: 'My VibeStream Video' }).catch(() => {
+            // Fallback if share is cancelled
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+        });
+    } else {
+        // 2. For PC/Laptop: Direct hidden link trigger
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        // Clean up
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 100);
+    }
+    btn.innerText = "● RECORD VIDEO";
+};
+            videoRec.start();
+            btn.innerText = "STOP VIDEO";
+        } else {
+            videoRec.stop();
+            audioEl.pause();
+        };
+            
+    }
+
+    function closeVideoBooth() {
+        document.getElementById('videoModal').style.display = 'none';
+        cancelAnimationFrame(animationId);
+        if(videoEl.srcObject) videoEl.srcObject.getTracks().forEach(t => t.stop());
+    }
+
+    // --- WAV ENGINE ---
     async function convertToWav(webmBlob) {
-        // A. Decode the WebM audio data
         const arrayBuffer = await webmBlob.arrayBuffer();
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-        // B. Prepare WAV encoding
         const numOfChan = audioBuffer.numberOfChannels;
         const length = audioBuffer.length * numOfChan * 2 + 44;
         const buffer = new ArrayBuffer(length);
         const view = new DataView(buffer);
-        let channels = [], i, sample;
-        let offset = 0;
-        let pos = 0;
-
-        // C. Write WAV Header
+        const writeString = (v, o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
         writeString(view, 0, 'RIFF');
         view.setUint32(4, 36 + audioBuffer.length * numOfChan * 2, true);
         writeString(view, 8, 'WAVE');
@@ -307,121 +378,17 @@
         view.setUint16(34, 16, true);
         writeString(view, 36, 'data');
         view.setUint32(40, audioBuffer.length * numOfChan * 2, true);
-
-        // D. Interleave and write audio data
-        for(i = 0; i < audioBuffer.numberOfChannels; i++)
-            channels.push(audioBuffer.getChannelData(i));
-
-        offset = 44;
-        while(pos < audioBuffer.length){
-            for(i = 0; i < numOfChan; i++){
-                sample = Math.max(-1, Math.min(1, channels[i][pos])); // Clamp
-                sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767)|0; // Scale to 16-bit
+        let offset = 44;
+        for(let pos = 0; pos < audioBuffer.length; pos++){
+            for(let i = 0; i < numOfChan; i++){
+                let sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(i)[pos]));
+                sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767)|0;
                 view.setInt16(offset, sample, true);
                 offset += 2;
             }
-            pos++;
         }
-
         return new Blob([buffer], { type: "audio/wav" });
     }
-
-    function writeString(view, offset, string) {
-        for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
-    }
-
-    // --- 5. SHARE FUNCTION (UPDATED) ---
-    async function shareAudio() {
-        if (!audioBlob) return;
-        
-        // Ensure file is treated as a WAV
-        const file = new File([audioBlob], "vibestream_record.wav", { type: "audio/wav" });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: 'My VibeStream',
-                    text: 'Listen to my new track!'
-                });
-            } catch (err) { console.log("Share failed", err); }
-        } else {
-            // Direct Download Fallback
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(audioBlob);
-            a.download = "vibestream_record.wav"; // Forces .wav extension
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
-    }
-
-    // --- 6. VIDEO BOOTH ---
-    let videoRec, canvas, ctx, animationId;
-    let videoEl = document.createElement('video');
-    videoEl.autoplay = true; videoEl.muted = true; videoEl.playsInline = true;
-
-    async function openVideoBooth() {
-        document.getElementById('videoModal').style.display = 'flex';
-        canvas = document.getElementById('videoCanvas');
-        ctx = canvas.getContext('2d');
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 720} } });
-            videoEl.srcObject = stream;
-            videoEl.play();
-            drawLoop();
-        } catch(e) { alert("Camera Error: " + e.message); }
-    }
-
-    function closeVideoBooth() {
-        document.getElementById('videoModal').style.display = 'none';
-        cancelAnimationFrame(animationId);
-        if(videoEl.srcObject) videoEl.srcObject.getTracks().forEach(t => t.stop());
-    }
-
-    function drawLoop() {
-        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-        ctx.font = "bold 30px Arial";
-        ctx.fillStyle = "rgba(255,255,255,0.7)";
-        ctx.textAlign = "right";
-        ctx.fillText("VibeStream", canvas.width - 20, canvas.height - 30);
-        animationId = requestAnimationFrame(drawLoop);
-    }
-
-    async function startVideoRecording() {
-        const btn = document.getElementById('btnCamRecord');
-        const audioEl = document.getElementById('masterAudio');
-
-        if(btn.innerText.includes("Rec")) {
-            audioEl.play();
-            const stream = canvas.captureStream(30);
-            videoRec = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            let chunks = [];
-            videoRec.ondataavailable = e => chunks.push(e.data);
-            videoRec.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'vibestream_video.webm';
-                a.click();
-                btn.innerText = "● Rec Video";
-                btn.style.background = "#ef4444";
-            };
-            videoRec.start();
-            btn.innerText = "■ Stop";
-            btn.style.background = "white";
-            btn.style.color = "black";
-            audioEl.onended = () => { if(videoRec.state === 'recording') videoRec.stop(); };
-        } else {
-            videoRec.stop();
-            audioEl.pause();
-            audioEl.currentTime = 0;
-        }
-    }
 </script>
-
 </body>
 </html>
